@@ -1,0 +1,248 @@
+# Industrial Heater Control System
+## Alkaline Plating Bath Temperature Controller
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Platform](https://img.shields.io/badge/platform-Arduino%20Uno-blue.svg)](https://www.arduino.cc/)
+[![Simulation](https://img.shields.io/badge/simulation-Proteus-green.svg)](https://www.labcenter.com/)
+
+---
+
+## 📖 Overview
+
+This project implements a **12kW industrial heater control system** for an alkaline plating bath. Uses ATmega328P to manage three 4kW immersion heaters with temperature control and safety interlocks.
+
+**Key Features:**
+- Temperature control via PT100 sensor
+- Water level safety interlock
+- 3-phase 380V AC power switching (SSR)
+- Real-time serial debugging
+- Complete Proteus simulation
+
+---
+
+## 📁 Repository Structure
+
+```
+Industrial-Heater-Control/
+├── src/
+│   └── heater_control.ino       # Main Arduino code
+├── hardware/
+│   └── schematics/
+│       └── heater_control.dsn   # Proteus circuit file
+├── docs/
+│   └── assembly_guide.md        # Step-by-step assembly
+└── README.md                    # This file
+```
+
+---
+
+## 🔧 Hardware Specifications
+
+| Component | Specification | Quantity |
+|-----------|--------------|----------|
+| Heaters | 4kW, SS-316Ti, 220V | 3 |
+| Temperature Sensor | PT100 RTD, 3-wire | 1 |
+| Controller | ATmega328P | 1 |
+| SSR | 50A, with heatsink | 3 |
+| Level Relay | Conductive type | 1 |
+| Power Supply | 5V DC | 1 |
+| Enclosure | NEMA 4X | 1 |
+
+**Power Ratings:**
+- Total Load: 12 kW
+- Supply: 380V AC, 3-Phase, 50Hz
+- Current: ~18.2A per phase
+- Breakers: 1×32A, 3×10A
+
+---
+
+## 🔌 Pin Connections
+
+### ATmega328P DIP-28 Pin Mapping
+
+| Arduino Pin | Chip Pin | Component | Direction |
+|-------------|----------|-----------|-----------|
+| A0 | Pin 23 (PC0) | PT100 Sensor | Input |
+| D2 | Pin 4 (PD2) | Level Sensor | Input |
+| **D11** | **Pin 17 (PB3)** | **SSR Control** | **Output** |
+| TX | Pin 2 (PD0) | Serial TX | Output |
+| RX | Pin 3 (PD1) | Serial RX | Input |
+
+**Power:**
+- Pin 7 (VCC) → +5V
+- Pin 8 (GND) → GND
+- Pin 20 (AVCC) → +5V
+- Pin 22 (GND) → GND
+
+---
+
+## 💻 Code
+
+### Installation
+
+1. Open `src/heater_control.ino` in Arduino IDE
+2. Select Board: Arduino Uno
+3. Upload to ATmega328P
+
+### Core Logic
+
+```cpp
+// Constants
+const int TEMP_PIN = A0;    // PT100 input
+const int LEVEL_PIN = 2;    // Level sensor
+const int SSR_PIN = 11;     // SSR control (Pin 17)
+const int SETPOINT = 565;   // 60°C target
+const int HYSTERESIS = 15;  // ±3°C deadband
+
+// Control Logic
+if (waterOk && adcValue < SETPOINT - HYSTERESIS) {
+    digitalWrite(SSR_PIN, HIGH);  // Heat ON
+} else if (adcValue > SETPOINT + HYSTERESIS) {
+    digitalWrite(SSR_PIN, LOW);   // Heat OFF
+} // else maintain state (hysteresis)
+```
+
+### Temperature Reference
+
+| Temp | PT100 (Ω) | ADC Value |
+|------|-----------|-----------|
+| 20°C | 107.8 | 530 |
+| 60°C | 123.2 | 565 |
+| 100°C | 138.5 | 593 |
+
+---
+
+## 🔌 Wiring Diagrams
+
+### PT100 Circuit
+```
++5V ──┬──── PT100 ────┬──── A0 (Pin 23)
+      │               │
+      │               ├──── 0.1µF ──── GND
+      │               │
+      └──── 100Ω ─────┴──── GND
+```
+
+### SSR Driver Circuit
+```
++5V ────┬── 330Ω ──── SSR(+)
+        │
+ATmega Pin17 ──── 1kΩ ──── SSR(-)
+
+AC Side:
+VSINE (311V) ──── SSR(Load1) ──── SSR(Load2) ──── 12.1Ω Heater
+```
+
+### Level Sensor
+```
+Logic State Output ──── D2 (Pin 4)
+                   │
+                   ├──── 10kΩ ──── GND
+```
+
+---
+
+## 🧪 Testing
+
+### Proteus Simulation
+
+1. Open `hardware/schematics/heater_control.dsn`
+2. Set ATmega clock: 16MHz
+3. Upload .hex file
+4. Run simulation (F12)
+5. Open Virtual Terminal (9600 baud)
+
+### Test Points
+
+| Test | Action | Expected Result |
+|------|--------|-----------------|
+| Water Present | Logic State HIGH | Heater ON when cold |
+| Low Water | Logic State LOW | Heater OFF (safety) |
+| Cold Start | PT100 = 107Ω | Heater ON |
+| Target Temp | PT100 = 123Ω | Heater OFF |
+| Safety Shutdown | Remove water | Instant OFF |
+
+### Serial Output Example
+```
+ADC: 530 | 20.0°C | Level: OK | Heater: ON
+ADC: 560 | 58.1°C | Level: OK | Heater: ON
+ADC: 575 | 77.2°C | Level: OK | Heater: OFF
+! LOW LEVEL - Heater OFF
+```
+
+---
+
+## ⚠️ Safety Features
+
+| Feature | Implementation |
+|---------|---------------|
+| Low Level Cutoff | Level relay interlock |
+| Over-temperature | Software limit |
+| Sensor Fault | Watchdog timer (3s) |
+| Emergency Stop | Hardware E-stop |
+| Circuit Protection | 32A + 3×10A breakers |
+
+---
+
+## 🔧 Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Heater won't turn ON | Check SSR_PIN = 11 matches hardware |
+| Heater won't turn OFF | ADC increases with temp - verify logic |
+| No serial output | Set Virtual Terminal to 9600 baud |
+| Relay chattering | Add hysteresis band |
+| Simulation won't start | Connect VCC (7,20) and GND (8,22) |
+
+---
+
+## 📈 Quick Reference
+
+### Pin Summary
+```
+VCC   → Pin 7  (+5V)
+GND   → Pin 8, 22
+A0    → Pin 23 (PT100)
+D2    → Pin 4  (Level)
+D11   → Pin 17 (SSR)
+```
+
+### Key Values
+```
+Setpoint: ADC 565 (60°C)
+Heater ON: ADC < 550
+Heater OFF: ADC > 580
+```
+
+### SSR Driver
+```
++5V ──330Ω── SSR(+)
+Pin17 ──1kΩ── SSR(-)
+```
+
+---
+
+## 📄 License
+
+MIT License - See LICENSE file for details.
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create feature branch
+3. Commit changes
+4. Push to branch
+5. Open Pull Request
+
+---
+
+## 📚 References
+
+- [ATmega328P Datasheet](https://ww1.microchip.com/downloads/en/DeviceDoc/Atmel-7810-Automotive-Microcontrollers-ATmega328P_Datasheet.pdf)
+- [PT100 Standards](https://www.omega.com/en-us/resources/rtd-pt100-standards)
+- [SSR Application Guide](https://www.crydom.com/en/tech/ssr_handbook.pdf)
+- [Proteus Tutorials](https://www.labcenter.com/support/)
+
+---
+
+*Version: 2.0 | Status: Verified | Last Updated: 2024*
